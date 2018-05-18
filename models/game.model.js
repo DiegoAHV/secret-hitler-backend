@@ -39,7 +39,7 @@ exports.Game = class Game {
     this.id = clientId;
     this.initiator = user;
     this.playerList = [new Player(user)];
-    this.message = null;
+    this.message = 'waitingForPlayers';
     Object.assign(this, getInitialGameState());
   }
 
