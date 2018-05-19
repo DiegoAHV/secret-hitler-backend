@@ -76,7 +76,7 @@ exports.Game = class Game {
   }
 
   assignPlayersFactions() {
-    let numberOfFascists = this.numberOfFascists - 1;
+    let numberOfFascists = this.numberOfFascists;
     let numberOfLiberals = this.numberOfLiberals;
     this.playerList.forEach(player => {
       if (player.isHitler()) return;
