@@ -39,7 +39,7 @@ exports.Game = class Game {
     this.id = clientId;
     this.initiator = user;
     this.playerList = [new Player(user)];
-    this.message = null;
+    this.message = 'waitingForPlayers';
     Object.assign(this, getInitialGameState());
   }
 
@@ -76,7 +76,7 @@ exports.Game = class Game {
   }
 
   assignPlayersFactions() {
-    let numberOfFascists = this.numberOfFascists - 1;
+    let numberOfFascists = this.numberOfFascists;
     let numberOfLiberals = this.numberOfLiberals;
     this.playerList.forEach(player => {
       if (player.isHitler()) return;

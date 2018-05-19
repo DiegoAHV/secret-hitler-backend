@@ -1,114 +1,69 @@
-const should = require('chai').should()
+const should = require('chai').should();
 
 const server = require('../../index');
 
-const actionController = require('./../../controllers/action.controller');
-const metaController = require('./../../controllers/meta.controller');
-const {gameList} = require('./../../models/gameList.model');
+const actionController = require('../../controllers/action.controller');
+const metaController = require('../../controllers/meta.controller');
+const {gameList} = require('../../models/gameList.model');
+const {initiator, users} = require('../mocks/users');
+const {gameProps} = require('../mocks/game');
 
+const {capitalize} = require('../../utils');
 
-const users = {
-  user1: {
-    name: 'Eric',
-    id: 'abc123'
+const payloads = {
+  createGame: {
+    clientId: gameProps.id,
+    user: initiator,
   },
-  user2: {
-    name: 'Batman',
-    id: 'qwe123'
-  },
-  user3: {
-    name: 'Emma',
-    id: 'qwe523'
-  },
-  user4: {
-    name: 'Martin',
-    id: 'qwe122'
-  },
-  user5: {
-    name: 'Dan',
-    id: 'qwe178'
-  },
-  
+  generate: (name) => ({
+    game,
+    message: 'acknowledge' + capitalize(name),
+    countName: name,
+  }),
 }
 
-const startGamePayload = {
-  clientId: '1234',
-  user: users.user1
-}
+metaController.createGame(payloads.createGame);
 
-metaController.createGame(startGamePayload);
+const game = gameList.get(gameProps.id);
+const players = [initiator, ...users];
 
-const gameId = '1234';
-const game = gameList.get(gameId);
+users.forEach(user => metaController.joinGame({game, user}));
 
-for (let i = 2; i < 6; i++) metaController.joinGame({game: game, user: users['user' + i]});
-
-metaController.startGame({game: game});
-
-const acknowledgeFascistsPayload = {
-  game: game,
-  message: 'acknowledgeFascists',
-  countName: 'fascists'
-}
-const acknowledgePlayerRolePayload = {
-  game: game,
-  message: 'acknowledgePlayerRole',
-  countName: 'playerRole'
-}
-const acknowledgePresidentPayload = {
-  game: game,
-  message: 'acknowledgePresident',
-  countName: 'president'
-}
-const acknowledgeChancellorPayload = {
-  game: game,
-  message: 'acknowledgeChancellor',
-  countName: 'chancellor'
-}
-const acknowledgeChosenPolicyPayload = {
-  game: game,
-  message: 'acknowledgeChosenPolicy',
-  countName: 'chosenPolicy'
-}
+metaController.startGame({game});
 
 const allPlayersVote = (vote) => {
-  actionController.voteOnChancellor({game: game, playerId: users.user1.id, vote: vote});
-  actionController.voteOnChancellor({game: game, playerId: users.user2.id, vote: vote});
-  actionController.voteOnChancellor({game: game, playerId: users.user3.id, vote: vote});
-  actionController.voteOnChancellor({game: game, playerId: users.user4.id, vote: vote});
-  actionController.voteOnChancellor({game: game, playerId: users.user5.id, vote: vote});
-}
+  players.forEach(player => {
+    actionController.voteOnChancellor({game, playerId: player.id, vote});
+  });
+};
 
-let suggestedChancellorId;
-
-describe('Action controllers', function() {
+describe('Action controllers', () => {
 
   after(() => {
     server.close();
-  })
-
-  it('should set game message to correct game messages when acknowledging roles, fascists and president are done', () => {
-    for (let i = 0; i < 5; i++) actionController.acknowledge(acknowledgePlayerRolePayload);
-    game.message.should.equal('showFascists');
-
-    for (let i = 0; i < 5; i++) actionController.acknowledge(acknowledgeFascistsPayload);
-    game.message.should.equal('showPresident');
-
-    for (let i = 0; i < 5; i++) actionController.acknowledge(acknowledgePresidentPayload);
-    game.message.should.equal('suggestChancellor');
-
   });
 
-  it('should set suggestedChancellor when president has suggested a chancellor and game message to "voteOnChancellor', () => {
-    suggestedChancellorId = game.playerList[2].president ? users.user1.id : users.user3.id;
-    actionController.suggestChancellor({game: game, playerId: suggestedChancellorId});
+  it('should set game message correctly when acknowledging roles, fascists and president complete', () => {
+    players.forEach(() => actionController.acknowledge(payloads.generate('playerRole')));
+    game.message.should.equal('showFascists');
+
+    players.forEach(() => actionController.acknowledge(payloads.generate('fascists')));
+    game.message.should.equal('showPresident');
+
+    players.forEach(() => actionController.acknowledge(payloads.generate('president')));
+    game.message.should.equal('suggestChancellor');
+  });
+
+  it('should set suggestedChancellor and game message to "voteOnChancellor" when president suggests one', () => {
+    const suggestedChancellorId = game.playerList[2].president ? players[0].id : players[2].id;
+    actionController.suggestChancellor({game, playerId: suggestedChancellorId});
     game.suggestedChancellor.should.equal(suggestedChancellorId);
     game.message.should.equal('voteChancellor');
   });
 
-  it('should set game.currentChancellor to new chancellor and game message to acknowledgeChancellor if vote is successful', () => {
+  it('should set currentChancellor to new chancellor and game message to acknowledgeChancellor if vote is successful', () => {
     allPlayersVote('ja');
-    game.currentChancellor.should.equal(suggestedChancellorId);
+    game.currentChancellor.should.equal(game.suggestedChancellor);
     game.message.should.equal('acknowledgeChancellor');
   });
 
@@ -129,36 +84,34 @@ describe('Action controllers', function() {
   });
 
   it('should set game message to "showPresidentPolicyCard" when acknowledging Chancellor is done', () => {
-    for (let i = 0; i < 5; i++) {
-      actionController.acknowledge(acknowledgeChancellorPayload);
-    }
+    players.forEach(() => actionController.acknowledge(payloads.generate('chancellor')));
     game.message.should.equal('showPresidentPolicyCards');
   });
-  
+
   it('should change game.eligiblePolicies from 3 to 2 cards and set game message to "showChancellorPolicyCards when president picks rejected policy', () => {
     const pickPoliciesPayload = {
-      game: game,
+      game,
       playerId: game.currentPresident,
       rejectedPolicy: 1
     }
-    actionController.pickPolicies(pickPoliciesPayload);
+    actionController.pickPolicies(payloads.pickPolicies);
     game.eligiblePolicies.length.should.equal(2);
     game.message.should.equal('showChancellorPolicyCards');
   });
 
   it('should set game message to "showPlayersChosenPolicy" when chancellor picks rejected policy', () => {
     const pickPoliciesPayload = {
-      game: game,
+      game,
       playerId: game.currentChancellor,
       rejectedPolicy: 0
     }
-    actionController.pickPolicies(pickPoliciesPayload);
+    actionController.pickPolicies(payloads.pickPolicies);
     game.message.should.equal('showPlayersChosenPolicy');
   });
-  
+
   it('should should ask president to execute player when all players have acknowledged chosen policy and 4 or 5 fascist policies have been enacted', () => {
     game.numberOfFascistPolicies = 4;
-    for (let i = 0; i < 5; i++) actionController.acknowledge(acknowledgeChosenPolicyPayload);
+    players.forEach(() => actionController.acknowledge(payloads.generate('chosenPolicy')));
     game.message.should.equal('askPresidentToExecutePlayer');
   });
 });
