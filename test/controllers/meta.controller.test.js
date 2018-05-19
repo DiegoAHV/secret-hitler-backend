@@ -3,43 +3,32 @@ const io = require('socket.io-client');
 
 const server = require('../../index');
 
-const mocks = require('../mocks');
+const {users} = require('../mocks/users');
 const socketUrl = 'http://localhost:3000';
 
-const options = {  
-  transports: ['websocket'],
-  'force new connection': true
-};
-
-const connectClients = (n) => {
-  const clients = [];
-  for (let i = 0; i < n; i++) {
-    const client = io.connect(socketUrl, options)
-    clients.push(client);
-  }
-  return clients
-}
+const connectClients = (n) => (
+  [...Array(n)].map(client => io.connect(socketUrl))
+);
 
 const createGame = (client) => {
-  client.emit('data', {type: 'createGame', payload: {user: mocks.users[0]}});
+  client.emit('data', {type: 'createGame', payload: {user: users[0]}});
 }
 
-const joinGame = (clients, game, n, index) => {
+const joinGame = (clients, game, n, offset) => {
   for (let i = 0; i < n; i++) {
-    clients[i].emit('data', {type:'joinGame', payload: {gameId: game.id, user: mocks.users[i+index]}});
+    clients[i].emit('data', {type:'joinGame', payload: {gameId: game.id, user: users[i + offset]}});
   }
 }
 
 const startGame = (clients, game) => {
-  clients[0].emit('data', {type: 'startGame', payload: {gameId: game.id, user: mocks.users[0]}});
+  clients[0].emit('data', {type: 'startGame', payload: {gameId: game.id, user: users[0]}});
 }
 
 const disconnectClients = (clients) => {
   clients.forEach(client => client && client.disconnect());
 }
 
-
-describe.only('Sockets', () => {  
+describe.only('Sockets', () => {
   let game;
 
   describe('Meta controllers', () => {
@@ -47,12 +36,12 @@ describe.only('Sockets', () => {
     after(() => {
       server.close();
     })
-  
+
     afterEach(done => {
       disconnectClients(clients);
       done();
     });
-  
+
     it('should send a game object back when type is "createGame"', done => {
       clients = connectClients(1);
       clients[0].on('data', data => {
@@ -62,7 +51,7 @@ describe.only('Sockets', () => {
       });
       createGame(clients[0]);
     });
-  
+
     it('should be able to join existing game and listen to backend', done => {
       clients = connectClients(1);
       clients[0].on('data', data => {
@@ -70,17 +59,14 @@ describe.only('Sockets', () => {
         expect(game.playerList.length).to.equal(2);
         done();
       });
-      joinGame(clients, game, 1, 1)
+      joinGame(clients, game, 1, 1);
     });
-  
+
     it('should be able to start game with correct property values', done => {
       clients = connectClients(4);
       clients[0].on('data', data => {
         game = data.payload;
-        if (game.numberOfLiberals) {
-  
-          done();
-        }
+        if (game.numberOfLiberals) done();
       });
       joinGame(clients, game, 3, 2);
       setTimeout(() => {
@@ -95,7 +81,7 @@ describe.only('Sockets', () => {
       game.message.should.equal('showRoles');
     });
 
-    it('current president should be a name', () => {
+    it('current president should be a string (user id)', () => {
       game.currentPresident.should.be.a('string');
     });
 
@@ -127,14 +113,15 @@ describe.only('Sockets', () => {
     });
 
     it('the player who created the game should be the initiator', () => {
-      game.initiator.name.should.equal(mocks.users[0].name);
+      game.initiator.id.should.equal(users[0].id);
+      game.initiator.name.should.equal(users[0].name);
     });
 
-    it('the value of numberOfLiberals property should be 3', () => {
+    it('the numberOfLiberals should be 3', () => {
       game.numberOfLiberals.should.equal(3);
     });
 
-    it('the value of numberOfFascists property should be 2', () => {
+    it('the numberOfFascists should be 2', () => {
       game.numberOfFascists.should.equal(2);
     });
   })
